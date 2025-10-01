@@ -13,7 +13,7 @@ type OrderRepository interface {
 	Create(ctx context.Context, order *models.Order) error
 
 	// GetByID retrieves an order by its ID
-	GetByID(ctx context.Context, orderID string) error
+	GetByID(ctx context.Context, orderID string) (*models.Order, error)
 
 	// Query retrieves orders based on query parameters
 	Query(ctx context.Context, query *models.OrderQuery) ([]*models.Order, error)
