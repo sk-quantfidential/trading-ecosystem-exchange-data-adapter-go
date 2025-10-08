@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/quantfidential/trading-ecosystem/exchange-data-adapter-go/internal/cache"
 	"github.com/quantfidential/trading-ecosystem/exchange-data-adapter-go/internal/config"
@@ -43,6 +44,40 @@ type ExchangeDataAdapter struct {
 	cacheRepo            interfaces.CacheRepository
 }
 
+// deriveSchemaName derives PostgreSQL schema name from service and instance names
+// Singleton: exchange-simulator → "exchange"
+// Multi-instance: exchange-OKX → "exchange_okx"
+func deriveSchemaName(serviceName, instanceName string) string {
+	if serviceName == instanceName {
+		// Singleton: Use first part of service name
+		parts := strings.Split(serviceName, "-")
+		return parts[0]
+	}
+	// Multi-instance: Use first part + second part (lowercased with underscore)
+	parts := strings.Split(instanceName, "-")
+	if len(parts) < 2 {
+		return parts[0]
+	}
+	return strings.ToLower(parts[0] + "_" + parts[1])
+}
+
+// deriveRedisNamespace derives Redis namespace from service and instance names
+// Singleton: exchange-simulator → "exchange"
+// Multi-instance: exchange-OKX → "exchange:OKX"
+func deriveRedisNamespace(serviceName, instanceName string) string {
+	if serviceName == instanceName {
+		// Singleton: Use first part of service name
+		parts := strings.Split(serviceName, "-")
+		return parts[0]
+	}
+	// Multi-instance: Use first part : second part (preserving case)
+	parts := strings.Split(instanceName, "-")
+	if len(parts) < 2 {
+		return parts[0]
+	}
+	return parts[0] + ":" + parts[1]
+}
+
 func NewExchangeDataAdapter(cfg *config.Config, logger *logrus.Logger) (DataAdapter, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
@@ -50,6 +85,23 @@ func NewExchangeDataAdapter(cfg *config.Config, logger *logrus.Logger) (DataAdap
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required")
 	}
+
+	// Apply derivation if schema name not explicitly provided
+	if cfg.SchemaName == "" {
+		cfg.SchemaName = deriveSchemaName(cfg.ServiceName, cfg.ServiceInstanceName)
+	}
+
+	// Apply derivation if Redis namespace not explicitly provided
+	if cfg.RedisNamespace == "" {
+		cfg.RedisNamespace = deriveRedisNamespace(cfg.ServiceName, cfg.ServiceInstanceName)
+	}
+
+	logger.WithFields(logrus.Fields{
+		"service_name":    cfg.ServiceName,
+		"instance_name":   cfg.ServiceInstanceName,
+		"schema_name":     cfg.SchemaName,
+		"redis_namespace": cfg.RedisNamespace,
+	}).Info("DataAdapter configuration resolved")
 
 	adapter := &ExchangeDataAdapter{
 		config: cfg,
