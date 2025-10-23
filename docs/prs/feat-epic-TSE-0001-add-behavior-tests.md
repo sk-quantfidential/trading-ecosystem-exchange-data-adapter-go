@@ -25,8 +25,6 @@ Details in commit message.
 
 Details in commit message.
 
-
-
 ## Testing
 
 ### Test Coverage
